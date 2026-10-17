@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#161512">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Best Move">
+  <title>Best Move</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Best Move</h1>
+    <div class="top-actions">
+      <button id="flipBtn" class="icon-btn" title="Flip board" aria-label="Flip board">⇅</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-area">
+      <div class="evalbar" id="evalBar" aria-hidden="true">
+        <div class="evalbar-white" id="evalWhite"></div>
+        <span class="evalbar-label" id="evalLabel">0.0</span>
+      </div>
+      <div class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Chess board"></div>
+        <svg class="arrows" id="arrows" viewBox="0 0 8 8" aria-hidden="true">
+          <defs>
+            <marker id="ah1" markerWidth="4" markerHeight="4" refX="2.05" refY="2" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L4,2 L0,4 z" class="ah1"></path>
+            </marker>
+            <marker id="ah2" markerWidth="4" markerHeight="4" refX="2.05" refY="2" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L4,2 L0,4 z" class="ah2"></path>
+            </marker>
+          </defs>
+          <g id="arrowLayer"></g>
+        </svg>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="analyze" class="tab active">Analyze</button>
+      <button role="tab" data-tab="edit" class="tab">Set up</button>
+      <button role="tab" data-tab="import" class="tab">Screenshot</button>
+    </nav>
+
+    <!-- Analyze -->
+    <section class="panel" id="panel-analyze">
+      <div class="row">
+        <button id="engineBtn" class="primary">▶ Analyze</button>
+        <button id="playBestBtn" disabled>Play best move</button>
+      </div>
+      <div class="row small">
+        <label>Think time
+          <select id="thinkTime">
+            <option value="1000">1 s</option>
+            <option value="3000" selected>3 s</option>
+            <option value="10000">10 s</option>
+            <option value="0">Until stopped</option>
+          </select>
+        </label>
+        <label>Lines
+          <select id="multiPv">
+            <option value="1">1</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <span id="engineStatus" class="muted">Engine loading…</span>
+      </div>
+      <ol class="lines" id="lines"></ol>
+      <div class="status" id="gameStatus"></div>
+      <div class="moves-head">
+        <span>Moves</span>
+        <div>
+          <button id="undoBtn" class="small-btn">↶ Undo</button>
+          <button id="redoBtn" class="small-btn">↷ Redo</button>
+        </div>
+      </div>
+      <div class="moves" id="moves"></div>
+      <div class="row">
+        <button id="newGameBtn">New game</button>
+        <button id="copyFenBtn">Copy FEN</button>
+      </div>
+    </section>
+
+    <!-- Edit -->
+    <section class="panel hidden" id="panel-edit">
+      <p class="muted">Pick a piece, then tap squares to place it. Tap a square again with the same piece to clear it.</p>
+      <div class="palette" id="palette"></div>
+      <div class="row small">
+        <label>To move
+          <select id="sideToMove">
+            <option value="w">White</option>
+            <option value="b">Black</option>
+          </select>
+        </label>
+        <fieldset class="castling">
+          <legend>Castling</legend>
+          <label><input type="checkbox" id="cK" checked> W O-O</label>
+          <label><input type="checkbox" id="cQ" checked> W O-O-O</label>
+          <label><input type="checkbox" id="ck" checked> B O-O</label>
+          <label><input type="checkbox" id="cq" checked> B O-O-O</label>
+        </fieldset>
+      </div>
+      <div class="row">
+        <button id="startPosBtn">Start position</button>
+        <button id="clearBtn">Clear board</button>
+      </div>
+      <div class="row">
+        <input id="fenInput" type="text" placeholder="Paste a FEN…" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="loadFenBtn">Load</button>
+      </div>
+      <div id="editError" class="error"></div>
+      <div id="refImageWrap" class="ref hidden">
+        <p class="muted">Your screenshot, for reference:</p>
+        <img id="refImage" alt="Screenshot reference">
+      </div>
+      <button id="doneEditBtn" class="primary wide">Done – analyze this position</button>
+    </section>
+
+    <!-- Import -->
+    <section class="panel hidden" id="panel-import">
+      <p class="muted">Pick a screenshot of a board (chess.com, lichess, a book, a photo…). Claude reads the position, and then you can fix anything it got wrong before analyzing.</p>
+      <label class="file-btn primary">
+        <input type="file" id="fileInput" accept="image/*">
+        📷 Choose screenshot
+      </label>
+      <img id="previewImg" class="preview hidden" alt="Selected screenshot">
+      <div class="row small">
+        <label>Bottom of the board is
+          <select id="bottomSide">
+            <option value="auto">Detect</option>
+            <option value="white">White</option>
+            <option value="black">Black</option>
+          </select>
+        </label>
+        <label>To move
+          <select id="importToMove">
+            <option value="auto">Detect</option>
+            <option value="w">White</option>
+            <option value="b">Black</option>
+          </select>
+        </label>
+      </div>
+      <button id="recognizeBtn" class="primary wide" disabled>Read position</button>
+      <div id="importStatus" class="status"></div>
+      <details class="key-box" id="keyBox">
+        <summary>Anthropic API key</summary>
+        <p class="muted">Reading screenshots uses the Claude API. Your key is stored only on this device and sent only to api.anthropic.com. Get one at console.anthropic.com.</p>
+        <div class="row">
+          <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button id="saveKeyBtn">Save</button>
+        </div>
+      </details>
+      <button id="manualFromImgBtn" class="wide hidden">Set it up by hand instead</button>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="promoModal" role="dialog" aria-label="Choose promotion piece">
+    <div class="modal-box" id="promoChoices"></div>
+  </div>
+
+  <footer class="foot muted">
+    Engine: Stockfish 19 (GPL-3.0) running on your device. Pieces: Cburnett (CC BY-SA 3.0).
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
