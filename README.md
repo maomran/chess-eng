@@ -28,8 +28,8 @@ set **Lines** to 3 or 5 to compare alternatives. **Play best move** makes the en
 
 It's a static site with no build step: serve the repo root from any static host.
 
-- **GitHub Pages:** in the repo's *Settings → Pages*, set *Source* to **GitHub Actions**.
-  The workflow in `.github/workflows/pages.yml` publishes every push to `main`.
+- **GitHub Pages:** in the repo's *Settings → Pages*, deploy from the `main` branch, root folder.
+  Every push to `main` republishes the site.
 - **Local:** `python3 -m http.server 8000` and open `http://localhost:8000`
   (to try it on your phone, use your computer's LAN IP on the same Wi-Fi).
 
