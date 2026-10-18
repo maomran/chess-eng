@@ -74,6 +74,7 @@ input[type=text], input[type=password] { flex: 1; min-width: 0; -webkit-user-sel
 .sq.last::before { background: var(--last); }
 .sq.sel::before { background: var(--sel); }
 .sq.check { background-image: var(--check); }
+.sq.unsure { box-shadow: inset 0 0 0 3px #f5c400; }
 .sq.target::after {
   content: ""; position: absolute; width: 28%; height: 28%; border-radius: 50%; background: rgba(20, 85, 30, .5);
 }
@@ -150,8 +151,6 @@ input[type=text], input[type=password] { flex: 1; min-width: 0; -webkit-user-sel
 .file-btn input { display: none; }
 .preview { display: block; max-width: 100%; max-height: 260px; margin: 10px auto 0; border-radius: 6px; }
 .ref img { max-width: 100%; border-radius: 6px; }
-.key-box { margin-top: 12px; }
-.key-box summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; z-index: 10; }
 .modal-box { display: flex; gap: 8px; background: var(--panel); padding: 12px; border-radius: 10px; }

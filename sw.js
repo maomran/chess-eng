@@ -1,18 +1,18 @@
 // Caches the app shell (including the engine) so it works offline after the first visit.
-const CACHE = 'bestmove-v3';
+const CACHE = 'bestmove-v5';
 const ASSETS = [
   './',
   'index.html',
   'styles.css',
   'app.js',
   'engine.js',
-  'vision.js',
+  'recognizer.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
   'vendor/chess.js',
   'vendor/pieces.svg',
-  'vendor/anthropic-sdk.js',
+  'vendor/piece-model.bin',
   'vendor/stockfish/stockfish-19-lite-single.js',
   'vendor/stockfish/stockfish-19-lite-single.wasm',
 ];

@@ -150,6 +150,7 @@
       <div class="row">
         <button id="startPosBtn">Start position</button>
         <button id="clearBtn">Clear board</button>
+        <button id="rotateBtn" title="Use when the screenshot was read upside down">Rotate 180°</button>
       </div>
       <div class="row">
         <input id="fenInput" type="text" placeholder="Paste a FEN…" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -165,7 +166,7 @@
 
     <!-- Import -->
     <section class="panel hidden" id="panel-import">
-      <p class="muted">Pick a screenshot of a board (chess.com, lichess, a book, a photo…). Claude reads the position, and then you can fix anything it got wrong before analyzing.</p>
+      <p class="muted">Pick a screenshot of a chess board from any app or website. It's read right on your phone, nothing is uploaded, and then you can fix anything it got wrong before analyzing.</p>
       <label class="file-btn primary">
         <input type="file" id="fileInput" accept="image/*">
         📷 Choose screenshot
@@ -181,7 +182,7 @@
         </label>
         <label>To move
           <select id="importToMove">
-            <option value="auto">Detect</option>
+            <option value="auto">Side at bottom</option>
             <option value="w">White</option>
             <option value="b">Black</option>
           </select>
@@ -189,14 +190,6 @@
       </div>
       <button id="recognizeBtn" class="primary wide" disabled>Read position</button>
       <div id="importStatus" class="status"></div>
-      <details class="key-box" id="keyBox">
-        <summary>Anthropic API key</summary>
-        <p class="muted">Reading screenshots uses the Claude API. Your key is stored only on this device and sent only to api.anthropic.com. Get one at console.anthropic.com.</p>
-        <div class="row">
-          <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <button id="saveKeyBtn">Save</button>
-        </div>
-      </details>
       <button id="manualFromImgBtn" class="wide hidden">Set it up by hand instead</button>
     </section>
   </main>
@@ -206,7 +199,7 @@
   </div>
 
   <footer class="foot muted">
-    Engine: Stockfish 19 (GPL-3.0) running on your device. Pieces: Cburnett (CC BY-SA 3.0).
+    Engine: Stockfish 19 (GPL-3.0). Everything runs on your device. Pieces: Cburnett (CC BY-SA 3.0).
   </footer>
 
   <script type="module" src="app.js"></script>

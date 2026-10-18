@@ -4,7 +4,6 @@ import { Engine } from './engine.js';
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const FILES = 'abcdefgh';
 const STORAGE_KEY = 'bestmove.state.v1';
-const KEY_STORAGE = 'bestmove.apiKey';
 
 const $ = (id) => document.getElementById(id);
 
@@ -279,6 +278,7 @@ function render() {
       if (state.targets.includes(sq)) cls.push('target');
       if (map[sq]) cls.push('occupied');
       if (checkSq === sq) cls.push('check');
+      if (editing && state.edit.unsure?.has(sq)) cls.push('unsure');
       let inner = map[sq] ? pieceSvg(map[sq]) : '';
       if (row === 7) inner += `<span class="coord file">${FILES[f]}</span>`;
       if (col === 0) inner += `<span class="coord rank">${r + 1}</span>`;
@@ -463,6 +463,7 @@ async function onSquareTap(sq) {
     const p = state.edit.piece;
     if (p === 'x' || b[sq] === p) delete b[sq];
     else b[sq] = p;
+    state.edit.unsure?.delete(sq);
     $('editError').textContent = '';
     updateCastlingBoxes();
     render();
@@ -549,6 +550,7 @@ function validatePosition(fen) {
 
 function enterEdit(fromFen) {
   const fen = fromFen || state.game.fen();
+  state.edit.unsure = null;
   const [placement, turn, castling] = fen.split(' ');
   state.edit.board = placementToMap(placement);
   $('sideToMove').value = turn;
@@ -738,10 +740,6 @@ function renderPlay(thinking = false) {
 let importFile = null;
 let importUrl = null;
 
-function getApiKey() {
-  try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; }
-}
-
 function setImportStatus(text, isError = false) {
   const el = $('importStatus');
   el.innerHTML = text;
@@ -754,45 +752,36 @@ function showReference() {
 }
 
 async function recognize() {
-  const key = getApiKey();
-  if (!key) {
-    $('keyBox').open = true;
-    setImportStatus('Add your Anthropic API key below first (or set the position up by hand).', true);
-    return;
-  }
+  if (!importFile) return;
   $('recognizeBtn').disabled = true;
   setImportStatus('<span class="spinner"></span>Reading the board…');
   try {
-    const { readBoardFromImage } = await import('./vision.js');
+    const { recognize: readImage } = await import('./recognizer.js');
     const bottomHint = $('bottomSide').value;
-    const res = await readBoardFromImage(importFile, key, { bottomSide: bottomHint === 'auto' ? null : bottomHint });
-    const placement = res.placement
+    const res = await readImage(importFile, { bottomHint: bottomHint === 'auto' ? null : bottomHint });
+    const placement = res.ranks
       .map((row) => row.replace(/\.+/g, (m) => String(m.length)))
       .join('/');
-    const bottom = bottomHint === 'auto' ? res.bottomSide : bottomHint;
     let turn = $('importToMove').value;
-    // If the image doesn't show whose move it is, assume the player at the bottom (usually you) is to move.
-    if (turn === 'auto') turn = res.sideToMove === 'unknown' ? bottom[0] : res.sideToMove[0];
-    state.orientation = bottom === 'black' ? 'b' : 'w';
+    // A screenshot rarely shows whose move it is; assume the player at the bottom (usually you).
+    if (turn === 'auto') turn = res.bottom[0];
+    state.orientation = res.bottom === 'black' ? 'b' : 'w';
 
     state.edit.board = placementToMap(placement);
+    state.edit.unsure = new Set(res.unsure);
     $('sideToMove').value = turn;
     updateCastlingBoxes(true);
     showReference();
     state.editPrepared = true;
     switchTab('edit');
-    const guessNote = res.sideToMove === 'unknown' && $('importToMove').value === 'auto'
-      ? ` I couldn't tell whose move it is, so I assumed ${turn === 'w' ? 'White' : 'Black'} (the side at the bottom). Check “To move”.` : '';
     $('editError').textContent = '';
     setImportStatus('');
-    showEditNote(`Check the position against your screenshot, fix anything that's off, then tap Done.${guessNote}${res.notes ? ' Note: ' + res.notes : ''}`);
+    let note = `Check the position against your screenshot, fix anything that's off, then tap Done. I assumed ${turn === 'w' ? 'White' : 'Black'} is to move — change “To move” if not.`;
+    if (res.unsure.length) note += ` Squares outlined in yellow were hard to read: ${res.unsure.join(', ')}.`;
+    showEditNote(note);
   } catch (err) {
     console.error(err);
-    let msg = err?.message || String(err);
-    if (err?.status === 401) msg = 'That API key was rejected. Check it and try again.';
-    else if (err?.status === 429) msg = 'Rate limited by the API. Wait a moment and try again.';
-    else if (err?.status === 529 || err?.status >= 500) msg = 'The API is busy right now. Try again shortly.';
-    setImportStatus(msg, true);
+    setImportStatus(err?.message || String(err), true);
     $('manualFromImgBtn').classList.remove('hidden');
   } finally {
     $('recognizeBtn').disabled = !importFile;
@@ -865,7 +854,20 @@ function wire() {
   });
   $('clearBtn').addEventListener('click', () => {
     state.edit.board = {};
+    state.edit.unsure = null;
     updateCastlingBoxes();
+    render();
+  });
+  $('rotateBtn').addEventListener('click', () => {
+    // Turns the position around (a1 <-> h8), for screenshots read from the wrong side.
+    const rot = (sq) => 'abcdefgh'[7 - 'abcdefgh'.indexOf(sq[0])] + (9 - +sq[1]);
+    const b = {};
+    for (const [sq, p] of Object.entries(state.edit.board)) b[rot(sq)] = p;
+    state.edit.board = b;
+    if (state.edit.unsure) state.edit.unsure = new Set([...state.edit.unsure].map(rot));
+    state.orientation = state.orientation === 'w' ? 'b' : 'w';
+    updateCastlingBoxes(true);
+    $('editError').textContent = '';
     render();
   });
   $('loadFenBtn').addEventListener('click', () => {
@@ -894,23 +896,12 @@ function wire() {
     $('recognizeBtn').disabled = false;
     $('manualFromImgBtn').classList.remove('hidden');
     setImportStatus('');
+    recognize();
   });
   $('recognizeBtn').addEventListener('click', recognize);
   $('manualFromImgBtn').addEventListener('click', () => {
     showReference();
     switchTab('edit');
-  });
-  $('apiKey').value = getApiKey();
-  $('keyBox').open = !getApiKey();
-  $('saveKeyBtn').addEventListener('click', () => {
-    try {
-      localStorage.setItem(KEY_STORAGE, $('apiKey').value.trim());
-      $('saveKeyBtn').textContent = 'Saved';
-      setTimeout(() => { $('saveKeyBtn').textContent = 'Save'; }, 1500);
-      setImportStatus('');
-    } catch {
-      setImportStatus('Could not save the key on this device.', true);
-    }
   });
 }
 
