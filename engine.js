@@ -54,12 +54,14 @@ export class Engine {
     this.pending = null;
     this.current = job;
     this.searching = true;
-    this.#send(`setoption name MultiPV value ${job.multiPv}`);
+    this.#send(`setoption name Skill Level value ${job.skill ?? 20}`);
+    this.#send(`setoption name MultiPV value ${job.multiPv ?? 1}`);
     this.#send(`position fen ${job.fen}`);
-    this.#send(job.movetime > 0 ? `go movetime ${job.movetime}` : 'go infinite');
+    if (job.depth) this.#send(`go depth ${job.depth}`);
+    else this.#send(job.movetime > 0 ? `go movetime ${job.movetime}` : 'go infinite');
   }
 
-  // job: { fen, multiPv, movetime (ms, 0 = infinite), onInfo(info), onDone(bestUci) }
+  // job: { fen, multiPv, skill (0-20), depth or movetime (ms, 0 = infinite), onInfo(info), onDone(bestUci) }
   analyze(job) {
     this.pending = job;
     if (this.searching) {

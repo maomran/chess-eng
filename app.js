@@ -23,7 +23,22 @@ const state = {
   lines: new Map(),  // multipv -> info, for the position in analysis
   analyzedFen: null,
   edit: { board: {}, piece: 'wP' },
+  play: { active: false, color: 'w', level: 2, over: null },
+  hint: null,        // uci of a hint shown while playing
 };
+
+// Computer strength per level. Stockfish's Skill Level makes it pick weaker moves on purpose;
+// the low levels also play a random move now and then so a beginner can win.
+const LEVELS = [
+  { skill: 0, depth: 1, random: 0.35 },
+  { skill: 2, depth: 2, random: 0.15 },
+  { skill: 5, depth: 4, random: 0.05 },
+  { skill: 8, depth: 6, random: 0 },
+  { skill: 11, depth: 8, random: 0 },
+  { skill: 14, depth: 11, random: 0 },
+  { skill: 17, depth: 14, random: 0 },
+  { skill: 20, movetime: 2000, random: 0 },
+];
 
 let engine;
 try {
@@ -110,6 +125,7 @@ function save() {
       line: state.line.map((m) => m.san),
       ply: state.ply,
       orientation: state.orientation,
+      play: state.play,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -125,6 +141,7 @@ function restore() {
     state.line = line;
     state.ply = Math.min(saved.ply, line.length);
     state.orientation = saved.orientation === 'b' ? 'b' : 'w';
+    if (saved.play) state.play = { ...state.play, ...saved.play };
   } catch {
     state.startFen = START_FEN;
     state.line = [];
@@ -174,12 +191,15 @@ function makeMove(move) {
 
 function positionChanged() {
   state.lines.clear();
+  state.hint = null;
   render();
   renderMoves();
   renderStatus();
   renderLines();
+  renderPlay();
   save();
   if (state.engineOn) analyze();
+  maybeComputerMove();
 }
 
 // ---------- engine ----------
@@ -291,15 +311,19 @@ function arrowSvg(uci, cls, marker, width) {
 
 function renderArrows() {
   const layer = $('arrowLayer');
-  const best = state.tab !== 'edit' && state.analyzedFen === state.game.fen() ? state.lines.get(1) : null;
-  layer.innerHTML = best?.pv?.[0] ? arrowSvg(best.pv[0], 'arrow1', 'ah1', 0.16) : '';
+  let uci = null;
+  if (state.tab === 'play') uci = state.hint;
+  else if (state.tab !== 'edit' && state.analyzedFen === state.game.fen()) uci = state.lines.get(1)?.pv?.[0];
+  layer.innerHTML = uci ? arrowSvg(uci, 'arrow1', 'ah1', 0.16) : '';
 }
 
 function renderEvalBar() {
   const bar = $('evalBar');
   const label = $('evalLabel');
   bar.classList.toggle('flipped', state.orientation === 'b');
-  const best = state.tab !== 'edit' && state.analyzedFen === state.game.fen() ? state.lines.get(1) : null;
+  // No evaluation while playing: it would give the game away.
+  const showEval = state.tab === 'analyze' && state.analyzedFen === state.game.fen();
+  const best = showEval ? state.lines.get(1) : null;
   let pct = 50;
   let text = '';
   const g = state.game;
@@ -446,6 +470,7 @@ async function onSquareTap(sq) {
   }
 
   const g = state.game;
+  if (isPlaying() && g.turn() !== state.play.color) return;
   if (state.selected && state.targets.includes(sq)) {
     const from = state.selected;
     const options = g.moves({ square: from, verbose: true }).filter((m) => m.to === sq);
@@ -571,12 +596,141 @@ function switchTab(tab) {
   const wasEdit = state.tab === 'edit';
   state.tab = tab;
   for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.dataset.tab === tab);
-  for (const p of ['analyze', 'edit', 'import']) $('panel-' + p).classList.toggle('hidden', p !== tab);
+  for (const p of ['analyze', 'play', 'edit', 'import']) $('panel-' + p).classList.toggle('hidden', p !== tab);
+  if (tab === 'play') {
+    setEngineOn(false);
+    state.hint = null;
+  }
   if (tab === 'edit' && !wasEdit && !state.editPrepared) enterEdit();
   state.editPrepared = false;
   state.selected = null;
   state.targets = [];
   render();
+  renderPlay();
+  maybeComputerMove();
+}
+
+// ---------- play vs computer ----------
+
+let computerJob = 0;
+
+function isPlaying() {
+  return state.tab === 'play' && state.play.active && !state.play.over;
+}
+
+function startGame(fromCurrent) {
+  const pick = $('playColor').value;
+  const color = pick === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : pick;
+  state.play = { active: true, color, level: +$('level').value, over: null };
+  state.orientation = color;
+  if (fromCurrent) loadStartFen(state.game.fen());
+  else loadStartFen(START_FEN);
+}
+
+function maybeComputerMove() {
+  const g = state.game;
+  if (!isPlaying() || !engine) return;
+  if (g.isGameOver()) {
+    state.play.over = 'end';
+    renderPlay();
+    save();
+    return;
+  }
+  if (g.turn() === state.play.color) return;
+
+  const job = ++computerJob;
+  const fen = g.fen();
+  const level = LEVELS[state.play.level] || LEVELS[2];
+  const started = Date.now();
+  const play = (uci) => {
+    // Short pause so the reply doesn't feel instant at low levels.
+    setTimeout(() => {
+      if (job !== computerJob || !isPlaying() || state.game.fen() !== fen) return;
+      makeMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+    }, Math.max(0, 500 - (Date.now() - started)));
+  };
+  renderPlay(true);
+
+  if (Math.random() < level.random) {
+    const moves = g.moves({ verbose: true });
+    const m = moves[Math.floor(Math.random() * moves.length)];
+    play(m.from + m.to + (m.promotion || ''));
+    return;
+  }
+  engine.analyze({
+    fen,
+    skill: level.skill,
+    depth: level.depth,
+    movetime: level.movetime,
+    onInfo() {},
+    onDone: (uci) => {
+      if (uci && uci !== '(none)') play(uci);
+    },
+  });
+}
+
+function showHint() {
+  if (!isPlaying() || !engine || state.game.turn() !== state.play.color) return;
+  const fen = state.game.fen();
+  $('hintBtn').disabled = true;
+  engine.analyze({
+    fen,
+    movetime: 1500,
+    onInfo() {},
+    onDone: (uci) => {
+      $('hintBtn').disabled = false;
+      if (state.game.fen() !== fen || !uci || uci === '(none)') return;
+      state.hint = uci;
+      renderArrows();
+    },
+  });
+}
+
+function takeBack() {
+  if (!state.play.active) return;
+  computerJob++;
+  engine?.stop();
+  state.play.over = null;
+  // Go back to the last position where it was the player's turn.
+  let ply = state.ply - 1;
+  const g = new Chess(state.startFen);
+  const turns = [g.turn()];
+  for (const m of state.line) { g.move(m.san); turns.push(g.turn()); }
+  while (ply > 0 && turns[ply] !== state.play.color) ply--;
+  if (ply < 0 || turns[ply] !== state.play.color) return;
+  state.line = state.line.slice(0, ply);
+  goToPly(ply);
+}
+
+function resign() {
+  if (!isPlaying()) return;
+  computerJob++;
+  engine?.stop();
+  state.play.over = 'resigned';
+  renderPlay();
+  save();
+}
+
+function renderPlay(thinking = false) {
+  const el = $('playStatus');
+  const g = state.game;
+  const p = state.play;
+  $('playControls').classList.toggle('hidden', !p.active || !!p.over);
+  $('level').value = String(p.level);
+  if (!p.active) {
+    el.textContent = 'Pick a level and your color, then start a game.';
+    return;
+  }
+  const you = p.color;
+  let text;
+  if (p.over === 'resigned') text = 'You resigned. Start a new game to play again.';
+  else if (g.isCheckmate()) text = g.turn() === you ? 'Checkmate — the computer wins.' : 'Checkmate — you win! 🎉';
+  else if (g.isGameOver()) text = 'Draw.';
+  else if (thinking || g.turn() !== you) text = '<span class="spinner"></span>Computer is thinking…';
+  else text = `Your move${g.inCheck() ? ' — you are in check!' : '.'}`;
+  el.innerHTML = text;
+  $('takebackBtn').disabled = state.ply === 0;
+  $('hintBtn').disabled = g.turn() !== you;
 }
 
 // ---------- screenshot import ----------
@@ -678,6 +832,15 @@ function wire() {
     if (uci) makeMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   });
   $('switchTurnBtn').addEventListener('click', switchTurn);
+  $('newPlayBtn').addEventListener('click', () => startGame(false));
+  $('playFromHereBtn').addEventListener('click', () => startGame(true));
+  $('hintBtn').addEventListener('click', showHint);
+  $('takebackBtn').addEventListener('click', takeBack);
+  $('resignBtn').addEventListener('click', resign);
+  $('level').addEventListener('change', () => {
+    state.play.level = +$('level').value;
+    save();
+  });
   $('undoBtn').addEventListener('click', () => goToPly(state.ply - 1));
   $('redoBtn').addEventListener('click', () => goToPly(state.ply + 1));
   $('moves').addEventListener('click', (e) => {

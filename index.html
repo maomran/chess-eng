@@ -43,6 +43,7 @@
 
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="analyze" class="tab active">Analyze</button>
+      <button role="tab" data-tab="play" class="tab">Play</button>
       <button role="tab" data-tab="edit" class="tab">Set up</button>
       <button role="tab" data-tab="import" class="tab">Screenshot</button>
     </nav>
@@ -89,6 +90,41 @@
       <div class="row">
         <button id="newGameBtn">New game</button>
         <button id="copyFenBtn">Copy FEN</button>
+      </div>
+    </section>
+
+    <!-- Play vs computer -->
+    <section class="panel hidden" id="panel-play">
+      <div class="row small">
+        <label>Level
+          <select id="level">
+            <option value="0">1 · Beginner</option>
+            <option value="1">2 · Novice</option>
+            <option value="2" selected>3 · Casual</option>
+            <option value="3">4 · Club</option>
+            <option value="4">5 · Strong club</option>
+            <option value="5">6 · Expert</option>
+            <option value="6">7 · Master</option>
+            <option value="7">8 · Maximum</option>
+          </select>
+        </label>
+        <label>You play
+          <select id="playColor">
+            <option value="w">White</option>
+            <option value="b">Black</option>
+            <option value="r">Random</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button id="newPlayBtn" class="primary">New game</button>
+        <button id="playFromHereBtn">From this position</button>
+      </div>
+      <div class="play-status" id="playStatus"></div>
+      <div class="row" id="playControls">
+        <button id="hintBtn">💡 Hint</button>
+        <button id="takebackBtn">↶ Undo</button>
+        <button id="resignBtn">Resign</button>
       </div>
     </section>
 
