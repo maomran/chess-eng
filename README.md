@@ -13,8 +13,10 @@ The engine is **Stockfish 19** compiled to WebAssembly, and it runs entirely on 
    This step needs an Anthropic API key (from console.anthropic.com). The key is saved only on your device
    and sent only to `api.anthropic.com`. Everything else works without a key, and offline after the first visit.
 
-The analysis shows the top 1–5 lines with evaluations from White's side (`+1.20` means White is better, `#3` means mate in 3),
-arrows for the best two moves, and an evaluation bar. **Play best move** makes the engine's move on the board.
+The analysis shows the best move in large type with a green arrow on the board, for whichever side is to move.
+If the turn is wrong (for example after reading a screenshot), tap **Switch turn**.
+Below it are the engine's lines with evaluations from White's side (`+1.20` means White is better, `#-3` means Black mates in 3);
+set **Lines** to 3 or 5 to compare alternatives. **Play best move** makes the engine's move on the board.
 
 ## Install on iPhone
 

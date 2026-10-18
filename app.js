@@ -210,12 +210,14 @@ function analyze() {
       for (const k of state.lines.keys()) if (k > +$('multiPv').value) state.lines.delete(k);
       renderLines();
       const d = state.lines.get(1)?.depth;
-      if (d) $('engineStatus').innerHTML = `<span class="spinner"></span>Depth ${d}`;
+      if (d && state.lines.get(1)?.mate === undefined) $('engineStatus').innerHTML = `<span class="spinner"></span>Depth ${d}`;
     },
     onDone: () => {
       if (state.analyzedFen !== fen) return;
       const d = state.lines.get(1)?.depth;
-      $('engineStatus').textContent = d ? `Done · depth ${d}` : 'Done';
+      // Depth is meaningless once a forced mate is found, so leave it out then.
+      const mateFound = state.lines.get(1)?.mate !== undefined;
+      $('engineStatus').textContent = d && !mateFound ? `Done · depth ${d}` : 'Done';
     },
   });
 }
@@ -289,16 +291,8 @@ function arrowSvg(uci, cls, marker, width) {
 
 function renderArrows() {
   const layer = $('arrowLayer');
-  if (state.tab === 'edit' || state.analyzedFen !== state.game.fen()) {
-    layer.innerHTML = '';
-    return;
-  }
-  const parts = [];
-  const second = state.lines.get(2);
-  if (second?.pv?.[0]) parts.push(arrowSvg(second.pv[0], 'arrow2', 'ah2', 0.12));
-  const best = state.lines.get(1);
-  if (best?.pv?.[0]) parts.push(arrowSvg(best.pv[0], 'arrow1', 'ah1', 0.16));
-  layer.innerHTML = parts.join('');
+  const best = state.tab !== 'edit' && state.analyzedFen === state.game.fen() ? state.lines.get(1) : null;
+  layer.innerHTML = best?.pv?.[0] ? arrowSvg(best.pv[0], 'arrow1', 'ah1', 0.16) : '';
 }
 
 function renderEvalBar() {
@@ -329,8 +323,10 @@ function renderEvalBar() {
 function renderLines() {
   const ol = $('lines');
   const fen = state.game.fen();
+  const bestEl = $('bestMove');
   if (state.analyzedFen !== fen || state.lines.size === 0) {
     ol.innerHTML = '';
+    bestEl.classList.add('hidden');
     $('playBestBtn').disabled = true;
     renderArrows();
     renderEvalBar();
@@ -349,9 +345,20 @@ function renderLines() {
       return i === 0 ? `${prefix}<b>${m.san}</b>` : prefix + m.san;
     });
     const neg = s.white < 0;
-    return `<li class="${k === 1 ? 'best' : ''}"><span class="score ${neg ? 'neg' : ''}">${s.text}</span><span class="pv">${parts.join(' ')}</span><span class="depth">d${info.depth}</span></li>`;
+    return `<li class="${k === 1 ? 'best' : ''}"><span class="score ${neg ? 'neg' : ''}">${s.text}</span><span class="pv">${parts.join(' ')}</span><span class="depth">${info.mate === undefined ? 'd' + info.depth : ''}</span></li>`;
   }).join('');
-  $('playBestBtn').disabled = !state.lines.get(1)?.pv?.[0];
+  const best = state.lines.get(1);
+  const bestSan = best?.pv?.[0] ? pvToSan(fen, best.pv, 1)[0]?.san : null;
+  bestEl.classList.toggle('hidden', !bestSan);
+  if (bestSan) {
+    const side = best.turn === 'w' ? 'White' : 'Black';
+    let verdict = formatScore(best, best.turn).text;
+    if (best.mate > 0) verdict = `Mate in ${best.mate}`;
+    else if (best.mate < 0) verdict = `Gets mated in ${-best.mate}`;
+    else if (best.mate === 0) verdict = 'Mated';
+    bestEl.innerHTML = `<span class="label">Best move for ${side}</span><span class="san">${bestSan}</span><span class="score">${verdict}</span>`;
+  }
+  $('playBestBtn').disabled = !bestSan;
   renderArrows();
   renderEvalBar();
 }
@@ -378,6 +385,20 @@ function renderMoves() {
   $('redoBtn').disabled = state.ply >= state.line.length;
 }
 
+// Flips whose turn it is in the current position (for when a screenshot or setup got it wrong).
+function switchTurn() {
+  const parts = state.game.fen().split(' ');
+  parts[1] = parts[1] === 'w' ? 'b' : 'w';
+  parts[3] = '-';
+  const fen = parts.join(' ');
+  const err = validatePosition(fen);
+  if (err) {
+    $('gameStatus').textContent = err;
+    return;
+  }
+  loadStartFen(fen);
+}
+
 function renderStatus() {
   const g = state.game;
   const el = $('gameStatus');
@@ -389,6 +410,7 @@ function renderStatus() {
   else if (g.isDraw()) text = 'Draw — 50-move rule.';
   else text = `${g.turn() === 'w' ? 'White' : 'Black'} to move${g.inCheck() ? ' (in check)' : ''}.`;
   el.textContent = text;
+  $('switchTurnBtn').classList.toggle('hidden', g.isGameOver());
 }
 
 // ---------- board input ----------
@@ -593,9 +615,10 @@ async function recognize() {
     const placement = res.placement
       .map((row) => row.replace(/\.+/g, (m) => String(m.length)))
       .join('/');
-    let turn = $('importToMove').value;
-    if (turn === 'auto') turn = res.sideToMove === 'black' ? 'b' : 'w';
     const bottom = bottomHint === 'auto' ? res.bottomSide : bottomHint;
+    let turn = $('importToMove').value;
+    // If the image doesn't show whose move it is, assume the player at the bottom (usually you) is to move.
+    if (turn === 'auto') turn = res.sideToMove === 'unknown' ? bottom[0] : res.sideToMove[0];
     state.orientation = bottom === 'black' ? 'b' : 'w';
 
     state.edit.board = placementToMap(placement);
@@ -605,7 +628,7 @@ async function recognize() {
     state.editPrepared = true;
     switchTab('edit');
     const guessNote = res.sideToMove === 'unknown' && $('importToMove').value === 'auto'
-      ? ' I couldn\'t tell whose move it is, so check “To move”.' : '';
+      ? ` I couldn't tell whose move it is, so I assumed ${turn === 'w' ? 'White' : 'Black'} (the side at the bottom). Check “To move”.` : '';
     $('editError').textContent = '';
     setImportStatus('');
     showEditNote(`Check the position against your screenshot, fix anything that's off, then tap Done.${guessNote}${res.notes ? ' Note: ' + res.notes : ''}`);
@@ -654,6 +677,7 @@ function wire() {
     const uci = state.lines.get(1)?.pv?.[0];
     if (uci) makeMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   });
+  $('switchTurnBtn').addEventListener('click', switchTurn);
   $('undoBtn').addEventListener('click', () => goToPly(state.ply - 1));
   $('redoBtn').addEventListener('click', () => goToPly(state.ply + 1));
   $('moves').addEventListener('click', (e) => {

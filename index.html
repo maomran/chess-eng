@@ -35,9 +35,6 @@
             <marker id="ah1" markerWidth="4" markerHeight="4" refX="2.05" refY="2" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L4,2 L0,4 z" class="ah1"></path>
             </marker>
-            <marker id="ah2" markerWidth="4" markerHeight="4" refX="2.05" refY="2" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L4,2 L0,4 z" class="ah2"></path>
-            </marker>
           </defs>
           <g id="arrowLayer"></g>
         </svg>
@@ -60,22 +57,27 @@
         <label>Think time
           <select id="thinkTime">
             <option value="1000">1 s</option>
-            <option value="3000" selected>3 s</option>
+            <option value="3000">3 s</option>
+            <option value="5000" selected>5 s</option>
             <option value="10000">10 s</option>
             <option value="0">Until stopped</option>
           </select>
         </label>
         <label>Lines
           <select id="multiPv">
-            <option value="1">1</option>
-            <option value="3" selected>3</option>
+            <option value="1" selected>1</option>
+            <option value="3">3</option>
             <option value="5">5</option>
           </select>
         </label>
         <span id="engineStatus" class="muted">Engine loading…</span>
       </div>
+      <div class="turn-row">
+        <span class="status" id="gameStatus"></span>
+        <button id="switchTurnBtn" class="small-btn">Switch turn</button>
+      </div>
+      <div class="bestmove hidden" id="bestMove"></div>
       <ol class="lines" id="lines"></ol>
-      <div class="status" id="gameStatus"></div>
       <div class="moves-head">
         <span>Moves</span>
         <div>
