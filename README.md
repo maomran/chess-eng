@@ -16,7 +16,8 @@ The engine is **Stockfish 19** compiled to WebAssembly, and it runs entirely on 
 
 Everything runs on your phone and keeps working offline after the first visit.
 
-The analysis shows the best move in large type with a green arrow on the board, for whichever side is to move.
+The analysis shows the best move in large type with a green arrow on the board, for whichever side is to move,
+and the second-best move with a black arrow (turn this off with the **2nd best** checkbox).
 If the turn is wrong (for example after reading a screenshot), tap **Switch turn**.
 Below it are the engine's lines with evaluations from White's side (`+1.20` means White is better, `#-3` means Black mates in 3);
 set **Lines** to 3 or 5 to compare alternatives. **Play best move** makes the engine's move on the board.

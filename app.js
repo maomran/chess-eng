@@ -203,6 +203,16 @@ function positionChanged() {
 
 // ---------- engine ----------
 
+// The i-th best line found so far (0 = best), in the engine's ranking order.
+function topLine(i) {
+  return [...state.lines.entries()].sort((a, b) => a[0] - b[0])[i]?.[1] ?? null;
+}
+
+// Lines to ask the engine for: the "Lines" setting, but at least 2 when the 2nd-best arrow is on.
+function linesWanted() {
+  return Math.max(+$('multiPv').value, $('showSecond').checked ? 2 : 1);
+}
+
 function analyze() {
   if (!engine) return;
   const g = state.game;
@@ -217,25 +227,33 @@ function analyze() {
   state.analyzedFen = fen;
   state.lines.clear();
   $('engineStatus').innerHTML = engine.ready ? '<span class="spinner"></span>Thinking…' : 'Engine loading…';
+  const byDepth = new Map();
   engine.analyze({
     fen,
-    multiPv: +$('multiPv').value,
+    multiPv: linesWanted(),
     movetime: +$('thinkTime').value,
     onInfo: (info) => {
       if (state.analyzedFen !== fen) return;
       info.turn = turn;
-      state.lines.set(info.multipv, info);
-      // A deeper multipv=1 line makes stale lower lines from the previous depth misleading; drop extras.
-      for (const k of state.lines.keys()) if (k > +$('multiPv').value) state.lines.delete(k);
+      // Stockfish reorders its lines as it searches deeper, so mixing depths can show the same move
+      // twice. Show the deepest depth that has every line (or just the deepest one so far).
+      if (!byDepth.has(info.depth)) byDepth.set(info.depth, new Map());
+      const atDepth = byDepth.get(info.depth);
+      for (const [k, other] of atDepth) if (k !== info.multipv && other.pv[0] === info.pv[0]) atDepth.delete(k);
+      atDepth.set(info.multipv, info);
+      const want = linesWanted();
+      const depths = [...byDepth.keys()].sort((a, b) => b - a);
+      const full = depths.find((d) => byDepth.get(d).size >= want) ?? depths[0];
+      state.lines = new Map([...byDepth.get(full)].filter(([k]) => k <= want));
       renderLines();
-      const d = state.lines.get(1)?.depth;
-      if (d && state.lines.get(1)?.mate === undefined) $('engineStatus').innerHTML = `<span class="spinner"></span>Depth ${d}`;
+      const d = topLine(0)?.depth;
+      if (d && topLine(0)?.mate === undefined) $('engineStatus').innerHTML = `<span class="spinner"></span>Depth ${d}`;
     },
     onDone: () => {
       if (state.analyzedFen !== fen) return;
-      const d = state.lines.get(1)?.depth;
+      const d = topLine(0)?.depth;
       // Depth is meaningless once a forced mate is found, so leave it out then.
-      const mateFound = state.lines.get(1)?.mate !== undefined;
+      const mateFound = topLine(0)?.mate !== undefined;
       $('engineStatus').textContent = d && !mateFound ? `Done · depth ${d}` : 'Done';
     },
   });
@@ -311,10 +329,16 @@ function arrowSvg(uci, cls, marker, width) {
 
 function renderArrows() {
   const layer = $('arrowLayer');
-  let uci = null;
-  if (state.tab === 'play') uci = state.hint;
-  else if (state.tab !== 'edit' && state.analyzedFen === state.game.fen()) uci = state.lines.get(1)?.pv?.[0];
-  layer.innerHTML = uci ? arrowSvg(uci, 'arrow1', 'ah1', 0.16) : '';
+  if (state.tab === 'play') {
+    layer.innerHTML = state.hint ? arrowSvg(state.hint, 'arrow1', 'ah1', 0.16) : '';
+    return;
+  }
+  const show = state.tab !== 'edit' && state.analyzedFen === state.game.fen();
+  const best = show ? topLine(0)?.pv?.[0] : null;
+  const second = show && $('showSecond').checked ? topLine(1)?.pv?.[0] : null;
+  // Second best (black) underneath, best (green) on top.
+  layer.innerHTML = (second && second !== best ? arrowSvg(second, 'arrow2', 'ah2', 0.13) : '')
+    + (best ? arrowSvg(best, 'arrow1', 'ah1', 0.16) : '');
 }
 
 function renderEvalBar() {
@@ -323,7 +347,7 @@ function renderEvalBar() {
   bar.classList.toggle('flipped', state.orientation === 'b');
   // No evaluation while playing: it would give the game away.
   const showEval = state.tab === 'analyze' && state.analyzedFen === state.game.fen();
-  const best = showEval ? state.lines.get(1) : null;
+  const best = showEval ? topLine(0) : null;
   let pct = 50;
   let text = '';
   const g = state.game;
@@ -358,7 +382,7 @@ function renderLines() {
   }
   const items = [...state.lines.entries()].sort((a, b) => a[0] - b[0]);
   const fullMove = +fen.split(' ')[5];
-  ol.innerHTML = items.map(([k, info]) => {
+  ol.innerHTML = items.map(([, info], idx) => {
     const s = formatScore(info, info.turn);
     const sans = pvToSan(fen, info.pv);
     const parts = sans.map((m, i) => {
@@ -369,9 +393,9 @@ function renderLines() {
       return i === 0 ? `${prefix}<b>${m.san}</b>` : prefix + m.san;
     });
     const neg = s.white < 0;
-    return `<li class="${k === 1 ? 'best' : ''}"><span class="score ${neg ? 'neg' : ''}">${s.text}</span><span class="pv">${parts.join(' ')}</span><span class="depth">${info.mate === undefined ? 'd' + info.depth : ''}</span></li>`;
+    return `<li class="${idx === 0 ? 'best' : ''}"><span class="score ${neg ? 'neg' : ''}">${s.text}</span><span class="pv">${parts.join(' ')}</span><span class="depth">${info.mate === undefined ? 'd' + info.depth : ''}</span></li>`;
   }).join('');
-  const best = state.lines.get(1);
+  const best = topLine(0);
   const bestSan = best?.pv?.[0] ? pvToSan(fen, best.pv, 1)[0]?.san : null;
   bestEl.classList.toggle('hidden', !bestSan);
   if (bestSan) {
@@ -380,7 +404,12 @@ function renderLines() {
     if (best.mate > 0) verdict = `Mate in ${best.mate}`;
     else if (best.mate < 0) verdict = `Gets mated in ${-best.mate}`;
     else if (best.mate === 0) verdict = 'Mated';
-    bestEl.innerHTML = `<span class="label">Best move for ${side}</span><span class="san">${bestSan}</span><span class="score">${verdict}</span>`;
+    bestEl.innerHTML = `<span class="label"><span class="key" style="background:rgba(21,120,27,.85)"></span>Best move for ${side}</span><span class="san">${bestSan}</span><span class="score">${verdict}</span>`;
+    const second = $('showSecond').checked ? topLine(1) : null;
+    const secondSan = second?.pv?.[0] ? pvToSan(fen, second.pv, 1)[0]?.san : null;
+    if (secondSan) {
+      bestEl.innerHTML += `<span class="second"><span class="key" style="background:rgba(0,0,0,.62);outline:1px solid #777"></span>2nd best: <b>${secondSan}</b> (${formatScore(second, second.turn).text})</span>`;
+    }
   }
   $('playBestBtn').disabled = !bestSan;
   renderArrows();
@@ -816,8 +845,12 @@ function wire() {
   $('engineBtn').addEventListener('click', () => setEngineOn(!state.engineOn));
   $('thinkTime').addEventListener('change', () => state.engineOn && analyze());
   $('multiPv').addEventListener('change', () => state.engineOn && analyze());
+  $('showSecond').addEventListener('change', () => {
+    if (state.engineOn) analyze();
+    else renderLines();
+  });
   $('playBestBtn').addEventListener('click', () => {
-    const uci = state.lines.get(1)?.pv?.[0];
+    const uci = topLine(0)?.pv?.[0];
     if (uci) makeMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   });
   $('switchTurnBtn').addEventListener('click', switchTurn);

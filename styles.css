@@ -90,6 +90,11 @@ input[type=text], input[type=password] { flex: 1; min-width: 0; -webkit-user-sel
 .arrows line { stroke-linecap: round; }
 .arrow1 { stroke: rgba(21, 120, 27, .85); }
 .ah1 { fill: rgba(21, 120, 27, .85); }
+.arrow2 { stroke: rgba(0, 0, 0, .62); }
+.ah2 { fill: rgba(0, 0, 0, .62); }
+.bestmove .second { flex-basis: 100%; font-size: 14px; color: var(--muted); }
+.bestmove .second b { color: var(--text); }
+.bestmove .key { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 
 .tabs { display: flex; gap: 6px; padding: 12px 16px 0; }
 .tab { flex: 1; background: transparent; border-color: transparent; color: var(--muted); font-weight: 600; }
