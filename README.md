@@ -26,6 +26,7 @@ set **Lines** to 3 or 5 to compare alternatives. **Play best move** makes the en
 
 The **Play** tab has 8 levels, from **1 · Beginner** (plays loose moves, good for learning) to **8 · Maximum** (full-strength Stockfish).
 Pick your color (or Random) and tap **New game**, or **From this position** to play out a position you set up or loaded from a screenshot.
+Tick **Coach** to see the best move (green arrow) and second-best move (black arrow) on each of your turns.
 While playing, the evaluation is hidden; **💡 Hint** shows the best move, **↶ Undo** takes back your last move, and **Resign** ends the game.
 You can switch to **Analyze** at any time to look at the game with the engine.
 

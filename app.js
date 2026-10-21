@@ -22,7 +22,8 @@ const state = {
   lines: new Map(),  // multipv -> info, for the position in analysis
   analyzedFen: null,
   edit: { board: {}, piece: 'wP' },
-  play: { active: false, color: 'w', level: 2, over: null },
+  play: { active: false, color: 'w', level: 2, over: null, coach: false },
+  coach: null,       // { fen, lines } from coach mode while playing
   hint: null,        // uci of a hint shown while playing
 };
 
@@ -213,6 +214,18 @@ function linesWanted() {
   return Math.max(+$('multiPv').value, $('showSecond').checked ? 2 : 1);
 }
 
+// Stockfish reorders its lines as it searches deeper, so mixing depths can show the same move
+// twice. Returns the lines of the deepest depth that has every line (or the deepest one so far).
+function mergeLine(byDepth, info, want) {
+  if (!byDepth.has(info.depth)) byDepth.set(info.depth, new Map());
+  const atDepth = byDepth.get(info.depth);
+  for (const [k, other] of atDepth) if (k !== info.multipv && other.pv[0] === info.pv[0]) atDepth.delete(k);
+  atDepth.set(info.multipv, info);
+  const depths = [...byDepth.keys()].sort((a, b) => b - a);
+  const full = depths.find((d) => byDepth.get(d).size >= want) ?? depths[0];
+  return new Map([...byDepth.get(full)].filter(([k]) => k <= want));
+}
+
 function analyze() {
   if (!engine) return;
   const g = state.game;
@@ -235,16 +248,7 @@ function analyze() {
     onInfo: (info) => {
       if (state.analyzedFen !== fen) return;
       info.turn = turn;
-      // Stockfish reorders its lines as it searches deeper, so mixing depths can show the same move
-      // twice. Show the deepest depth that has every line (or just the deepest one so far).
-      if (!byDepth.has(info.depth)) byDepth.set(info.depth, new Map());
-      const atDepth = byDepth.get(info.depth);
-      for (const [k, other] of atDepth) if (k !== info.multipv && other.pv[0] === info.pv[0]) atDepth.delete(k);
-      atDepth.set(info.multipv, info);
-      const want = linesWanted();
-      const depths = [...byDepth.keys()].sort((a, b) => b - a);
-      const full = depths.find((d) => byDepth.get(d).size >= want) ?? depths[0];
-      state.lines = new Map([...byDepth.get(full)].filter(([k]) => k <= want));
+      state.lines = mergeLine(byDepth, info, linesWanted());
       renderLines();
       const d = topLine(0)?.depth;
       if (d && topLine(0)?.mate === undefined) $('engineStatus').innerHTML = `<span class="spinner"></span>Depth ${d}`;
@@ -330,7 +334,13 @@ function arrowSvg(uci, cls, marker, width) {
 function renderArrows() {
   const layer = $('arrowLayer');
   if (state.tab === 'play') {
-    layer.innerHTML = state.hint ? arrowSvg(state.hint, 'arrow1', 'ah1', 0.16) : '';
+    const c = state.coach;
+    if (state.play.coach && c && c.fen === state.game.fen() && c.lines.size) {
+      const ranked = [...c.lines.entries()].sort((a, b) => a[0] - b[0]).map(([, l]) => l.pv[0]);
+      layer.innerHTML = (ranked[1] ? arrowSvg(ranked[1], 'arrow2', 'ah2', 0.13) : '') + arrowSvg(ranked[0], 'arrow1', 'ah1', 0.16);
+    } else {
+      layer.innerHTML = state.hint ? arrowSvg(state.hint, 'arrow1', 'ah1', 0.16) : '';
+    }
     return;
   }
   const show = state.tab !== 'edit' && state.analyzedFen === state.game.fen();
@@ -652,7 +662,7 @@ function isPlaying() {
 function startGame(fromCurrent) {
   const pick = $('playColor').value;
   const color = pick === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : pick;
-  state.play = { active: true, color, level: +$('level').value, over: null };
+  state.play = { active: true, color, level: +$('level').value, over: null, coach: $('coach').checked };
   state.orientation = color;
   if (fromCurrent) loadStartFen(state.game.fen());
   else loadStartFen(START_FEN);
@@ -667,7 +677,10 @@ function maybeComputerMove() {
     save();
     return;
   }
-  if (g.turn() === state.play.color) return;
+  if (g.turn() === state.play.color) {
+    coachAnalyze();
+    return;
+  }
 
   const job = ++computerJob;
   const fen = g.fen();
@@ -697,6 +710,30 @@ function maybeComputerMove() {
     onDone: (uci) => {
       if (uci && uci !== '(none)') play(uci);
     },
+  });
+}
+
+// Coach mode: on the player's turn, keep the best (green) and 2nd best (black) moves on the board.
+function coachAnalyze() {
+  const g = state.game;
+  state.coach = null;
+  if (!state.play.coach || !isPlaying() || !engine || g.isGameOver() || g.turn() !== state.play.color) {
+    renderArrows();
+    return;
+  }
+  const fen = g.fen();
+  const byDepth = new Map();
+  state.coach = { fen, lines: new Map() };
+  engine.analyze({
+    fen,
+    multiPv: 2,
+    movetime: 3000,
+    onInfo: (info) => {
+      if (state.coach?.fen !== fen || state.game.fen() !== fen) return;
+      state.coach.lines = mergeLine(byDepth, info, 2);
+      renderArrows();
+    },
+    onDone() {},
   });
 }
 
@@ -859,6 +896,12 @@ function wire() {
   $('hintBtn').addEventListener('click', showHint);
   $('takebackBtn').addEventListener('click', takeBack);
   $('resignBtn').addEventListener('click', resign);
+  $('coach').checked = !!state.play.coach;
+  $('coach').addEventListener('change', () => {
+    state.play.coach = $('coach').checked;
+    save();
+    coachAnalyze();
+  });
   $('level').addEventListener('change', () => {
     state.play.level = +$('level').value;
     save();
