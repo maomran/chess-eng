@@ -17,10 +17,10 @@ The engine is **Stockfish 19** compiled to WebAssembly, and it runs entirely on 
 Everything runs on your phone and keeps working offline after the first visit.
 
 The analysis shows the best move in large type with a green arrow on the board, for whichever side is to move,
-and the second-best move with a black arrow (turn this off with the **2nd best** checkbox).
+and the second-best move with a black arrow.
 If the turn is wrong (for example after reading a screenshot), tap **Switch turn**.
 Below it are the engine's lines with evaluations from White's side (`+1.20` means White is better, `#-3` means Black mates in 3);
-set **Lines** to 3 or 5 to compare alternatives. **Play best move** makes the engine's move on the board.
+open **⚙︎** to change the think time, show 3 or 5 lines to compare alternatives, or turn off the 2nd-best arrow. **Play best move** makes the engine's move on the board.
 
 ## Play against the computer
 
@@ -29,6 +29,9 @@ Pick your color (or Random) and tap **New game**, or **From this position** to p
 Tick **Coach** to see the best move (green arrow) and second-best move (black arrow) on each of your turns.
 While playing, the evaluation is hidden; **💡 Hint** shows the best move, **↶ Undo** takes back your last move, and **Resign** ends the game.
 You can switch to **Analyze** at any time to look at the game with the engine.
+
+The whole app fits on one screen with no scrolling: the board resizes to the space left over, and on wide
+screens (phone in landscape, iPad) the controls sit beside the board.
 
 ## Install on iPhone
 

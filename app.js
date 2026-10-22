@@ -193,7 +193,7 @@ function positionChanged() {
   state.lines.clear();
   state.hint = null;
   render();
-  renderMoves();
+  renderUndoRedo();
   renderStatus();
   renderLines();
   renderPlay();
@@ -273,6 +273,7 @@ function setEngineOn(on) {
     engine?.stop();
     $('engineStatus').textContent = engine?.ready ? 'Engine ready' : 'Engine loading…';
   }
+  renderLines();
 }
 
 // ---------- rendering ----------
@@ -384,13 +385,18 @@ function renderLines() {
   const bestEl = $('bestMove');
   if (state.analyzedFen !== fen || state.lines.size === 0) {
     ol.innerHTML = '';
-    bestEl.classList.add('hidden');
+    // The box keeps its size while idle so the board doesn't jump when results arrive.
+    bestEl.classList.add('idle');
+    if (state.game.isGameOver()) bestEl.textContent = 'Game over.';
+    else if (state.engineOn) bestEl.innerHTML = '<span class="spinner"></span>Finding the best move…';
+    else bestEl.textContent = 'Tap ▶ Analyze to see the best move.';
     $('playBestBtn').disabled = true;
     renderArrows();
     renderEvalBar();
     return;
   }
-  const items = [...state.lines.entries()].sort((a, b) => a[0] - b[0]);
+  // With Lines = 1 the best-move box says it all; the list is for comparing 3 or 5 lines.
+  const items = +$('multiPv').value > 1 ? [...state.lines.entries()].sort((a, b) => a[0] - b[0]) : [];
   const fullMove = +fen.split(' ')[5];
   ol.innerHTML = items.map(([, info], idx) => {
     const s = formatScore(info, info.turn);
@@ -407,7 +413,8 @@ function renderLines() {
   }).join('');
   const best = topLine(0);
   const bestSan = best?.pv?.[0] ? pvToSan(fen, best.pv, 1)[0]?.san : null;
-  bestEl.classList.toggle('hidden', !bestSan);
+  bestEl.classList.toggle('idle', !bestSan);
+  if (!bestSan) bestEl.innerHTML = '<span class="spinner"></span>Finding the best move…';
   if (bestSan) {
     const side = best.turn === 'w' ? 'White' : 'Black';
     let verdict = formatScore(best, best.turn).text;
@@ -426,24 +433,7 @@ function renderLines() {
   renderEvalBar();
 }
 
-function renderMoves() {
-  const el = $('moves');
-  if (!state.line.length) {
-    el.innerHTML = '<span class="muted">No moves yet. Tap a piece to move it.</span>';
-  } else {
-    const startFull = +state.startFen.split(' ')[5] || 1;
-    const blackFirst = state.startFen.split(' ')[1] === 'b';
-    const out = [];
-    state.line.forEach((m, i) => {
-      const idx = i + (blackFirst ? 1 : 0);
-      const num = startFull + Math.floor(idx / 2);
-      if (m.color === 'w') out.push(`<span class="num">${num}.</span>`);
-      else if (i === 0) out.push(`<span class="num">${num}…</span>`);
-      out.push(`<span class="mv ${i === state.ply - 1 ? 'cur' : ''}" data-ply="${i + 1}">${m.san}</span>`);
-    });
-    el.innerHTML = out.join(' ');
-    el.querySelector('.cur')?.scrollIntoView({ block: 'nearest' });
-  }
+function renderUndoRedo() {
   $('undoBtn').disabled = state.ply === 0;
   $('redoBtn').disabled = state.ply >= state.line.length;
 }
@@ -813,7 +803,7 @@ function setImportStatus(text, isError = false) {
 }
 
 function showReference() {
-  $('refImageWrap').classList.toggle('hidden', !importUrl);
+  $('refImage').classList.toggle('hidden', !importUrl);
   if (importUrl) $('refImage').src = importUrl;
 }
 
@@ -881,7 +871,7 @@ function wire() {
 
   $('engineBtn').addEventListener('click', () => setEngineOn(!state.engineOn));
   $('thinkTime').addEventListener('change', () => state.engineOn && analyze());
-  $('multiPv').addEventListener('change', () => state.engineOn && analyze());
+  $('multiPv').addEventListener('change', () => (state.engineOn ? analyze() : renderLines()));
   $('showSecond').addEventListener('change', () => {
     if (state.engineOn) analyze();
     else renderLines();
@@ -908,10 +898,6 @@ function wire() {
   });
   $('undoBtn').addEventListener('click', () => goToPly(state.ply - 1));
   $('redoBtn').addEventListener('click', () => goToPly(state.ply + 1));
-  $('moves').addEventListener('click', (e) => {
-    const mv = e.target.closest('.mv');
-    if (mv) goToPly(+mv.dataset.ply);
-  });
   $('newGameBtn').addEventListener('click', () => loadStartFen(START_FEN));
   $('copyFenBtn').addEventListener('click', async () => {
     const fen = state.game.fen();
@@ -960,6 +946,16 @@ function wire() {
   });
   $('sideToMove').addEventListener('change', () => { $('editError').textContent = ''; });
   $('doneEditBtn').addEventListener('click', finishEdit);
+  $('refImage').addEventListener('click', () => {
+    $('imageModalImg').src = importUrl;
+    $('imageModal').classList.remove('hidden');
+  });
+  $('imageModal').addEventListener('click', () => $('imageModal').classList.add('hidden'));
+  $('settingsBtn').addEventListener('click', () => {
+    const open = $('settingsRow').classList.toggle('hidden') === false;
+    $('settingsBtn').setAttribute('aria-expanded', String(open));
+    queueLayout();
+  });
 
   $('fileInput').addEventListener('change', (e) => {
     const file = e.target.files?.[0];
@@ -981,11 +977,52 @@ function wire() {
   });
 }
 
+// ---------- layout ----------
+
+// Sizes the board so everything fits on screen without scrolling: in portrait the board gets the
+// height left over after the header, tabs and current panel; on wide screens it sits beside them.
+function layout() {
+  const app = $('app');
+  // Measure the space the app can use (not the app itself, which is width-capped in portrait).
+  const cs = getComputedStyle(document.body);
+  const W = document.body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const H = app.clientHeight;
+  const landscape = W > H * 1.15 && W >= 560;
+  app.classList.toggle('landscape', landscape);
+  const evalW = 16 + 8;
+  let size;
+  if (landscape) {
+    size = Math.min(H - 16, W - Math.max(320, W * 0.32) - evalW - 24);
+  } else {
+    const panel = document.querySelector('.panel:not(.hidden)');
+    const used = $('top').offsetHeight + $('tabs').offsetHeight + (panel ? panel.offsetHeight + 8 : 0);
+    const maxW = Math.min(W, 760) - 32 - evalW;
+    // If a panel is very tall (e.g. Set up on a small phone), keep a decent board and let the panel scroll.
+    size = Math.max(Math.min(maxW, H - used), Math.min(maxW, H * 0.34));
+  }
+  app.style.setProperty('--board', `${Math.max(160, Math.floor(size))}px`);
+}
+
+let layoutQueued = false;
+function queueLayout() {
+  if (layoutQueued) return;
+  layoutQueued = true;
+  requestAnimationFrame(() => {
+    layoutQueued = false;
+    layout();
+  });
+}
+
+window.addEventListener('resize', queueLayout);
+window.addEventListener('orientationchange', queueLayout);
+new MutationObserver(queueLayout).observe($('panels'), { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
+
 restore();
 rebuildGame();
 buildPalette();
 wire();
 positionChanged();
+layout();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));

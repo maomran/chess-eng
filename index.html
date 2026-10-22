@@ -15,14 +15,14 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top">
+  <div class="app" id="app">
+  <header class="top" id="top">
     <h1>Best Move</h1>
     <div class="top-actions">
       <button id="flipBtn" class="icon-btn" title="Flip board" aria-label="Flip board">⇅</button>
     </div>
   </header>
 
-  <main>
     <section class="board-area">
       <div class="evalbar" id="evalBar" aria-hidden="true">
         <div class="evalbar-white" id="evalWhite"></div>
@@ -44,21 +44,23 @@
       </div>
     </section>
 
-    <nav class="tabs" role="tablist">
+    <nav class="tabs" id="tabs" role="tablist">
       <button role="tab" data-tab="analyze" class="tab active">Analyze</button>
       <button role="tab" data-tab="play" class="tab">Play</button>
       <button role="tab" data-tab="edit" class="tab">Set up</button>
       <button role="tab" data-tab="import" class="tab">Screenshot</button>
     </nav>
 
+    <div class="panels" id="panels">
     <!-- Analyze -->
     <section class="panel" id="panel-analyze">
       <div class="row">
         <button id="engineBtn" class="primary">▶ Analyze</button>
         <button id="playBestBtn" disabled>Play best move</button>
+        <button id="settingsBtn" class="narrow" aria-label="Analysis settings" aria-expanded="false">⚙︎</button>
       </div>
-      <div class="row small">
-        <label>Think time
+      <div class="row small hidden" id="settingsRow">
+        <label>Think
           <select id="thinkTime">
             <option value="1000">1 s</option>
             <option value="3000">3 s</option>
@@ -75,23 +77,17 @@
           </select>
         </label>
         <label><input type="checkbox" id="showSecond" checked> 2nd best</label>
-        <span id="engineStatus" class="muted">Engine loading…</span>
       </div>
       <div class="turn-row">
         <span class="status" id="gameStatus"></span>
+        <span id="engineStatus" class="muted engine-status">Engine loading…</span>
         <button id="switchTurnBtn" class="small-btn">Switch turn</button>
       </div>
-      <div class="bestmove hidden" id="bestMove"></div>
+      <div class="bestmove" id="bestMove"></div>
       <ol class="lines" id="lines"></ol>
-      <div class="moves-head">
-        <span>Moves</span>
-        <div>
-          <button id="undoBtn" class="small-btn">↶ Undo</button>
-          <button id="redoBtn" class="small-btn">↷ Redo</button>
-        </div>
-      </div>
-      <div class="moves" id="moves"></div>
       <div class="row">
+        <button id="undoBtn" class="narrow" aria-label="Undo move">↶</button>
+        <button id="redoBtn" class="narrow" aria-label="Redo move">↷</button>
         <button id="newGameBtn">New game</button>
         <button id="copyFenBtn">Copy FEN</button>
       </div>
@@ -112,7 +108,7 @@
             <option value="7">8 · Maximum</option>
           </select>
         </label>
-        <label>You play
+        <label>Side
           <select id="playColor">
             <option value="w">White</option>
             <option value="b">Black</option>
@@ -121,7 +117,7 @@
         </label>
       </div>
       <div class="row small">
-        <label><input type="checkbox" id="coach"> Coach: show the best move (green) and 2nd best (black) on your turn</label>
+        <label><input type="checkbox" id="coach"> Coach arrows (best green, 2nd black)</label>
       </div>
       <div class="row">
         <button id="newPlayBtn" class="primary">New game</button>
@@ -137,50 +133,44 @@
 
     <!-- Edit -->
     <section class="panel hidden" id="panel-edit">
-      <p class="muted">Pick a piece, then tap squares to place it. Tap a square again with the same piece to clear it.</p>
       <div class="palette" id="palette"></div>
-      <div class="row small">
-        <label>To move
-          <select id="sideToMove">
-            <option value="w">White</option>
-            <option value="b">Black</option>
-          </select>
-        </label>
-        <fieldset class="castling">
-          <legend>Castling</legend>
-          <label><input type="checkbox" id="cK" checked> W O-O</label>
-          <label><input type="checkbox" id="cQ" checked> W O-O-O</label>
-          <label><input type="checkbox" id="ck" checked> B O-O</label>
-          <label><input type="checkbox" id="cq" checked> B O-O-O</label>
-        </fieldset>
-      </div>
       <div class="row">
-        <button id="startPosBtn">Start position</button>
-        <button id="clearBtn">Clear board</button>
-        <button id="rotateBtn" title="Use when the screenshot was read upside down">Rotate 180°</button>
+        <select id="sideToMove" aria-label="Side to move">
+          <option value="w">White to move</option>
+          <option value="b">Black to move</option>
+        </select>
+        <button id="startPosBtn">Start</button>
+        <button id="clearBtn">Clear</button>
+        <button id="rotateBtn" title="Rotate the position 180° (when a screenshot was read upside down)">↻ 180°</button>
       </div>
+      <fieldset class="castling row small">
+        <legend>Castling:</legend>
+        <label title="White short castle">W<input type="checkbox" id="cK" checked>O-O</label>
+        <label title="White long castle"><input type="checkbox" id="cQ" checked>O-O-O</label>
+        <label title="Black short castle">B<input type="checkbox" id="ck" checked>O-O</label>
+        <label title="Black long castle"><input type="checkbox" id="cq" checked>O-O-O</label>
+      </fieldset>
       <div class="row">
         <input id="fenInput" type="text" placeholder="Paste a FEN…" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button id="loadFenBtn">Load</button>
       </div>
       <div id="editError" class="error"></div>
-      <div id="refImageWrap" class="ref hidden">
-        <p class="muted">Your screenshot, for reference:</p>
-        <img id="refImage" alt="Screenshot reference">
+      <div class="row">
+        <img id="refImage" class="ref-thumb hidden" alt="Your screenshot (tap to enlarge)">
+        <button id="doneEditBtn" class="primary">Done – analyze</button>
       </div>
-      <button id="doneEditBtn" class="primary wide">Done – analyze this position</button>
     </section>
 
     <!-- Import -->
     <section class="panel hidden" id="panel-import">
-      <p class="muted">Pick a screenshot of a chess board from any app or website. It's read right on your phone, nothing is uploaded, and then you can fix anything it got wrong before analyzing.</p>
+      <p class="muted tight">Pick a screenshot of a board from any chess app or site. It's read on your phone; nothing is uploaded.</p>
       <label class="file-btn primary">
         <input type="file" id="fileInput" accept="image/*">
         📷 Choose screenshot
       </label>
       <img id="previewImg" class="preview hidden" alt="Selected screenshot">
       <div class="row small">
-        <label>Bottom of the board is
+        <label>Bottom
           <select id="bottomSide">
             <option value="auto">Detect</option>
             <option value="white">White</option>
@@ -198,16 +188,16 @@
       <button id="recognizeBtn" class="primary wide" disabled>Read position</button>
       <div id="importStatus" class="status"></div>
       <button id="manualFromImgBtn" class="wide hidden">Set it up by hand instead</button>
+      <p class="credits muted">Engine: Stockfish 19 (GPL-3.0). Everything runs on your device. Pieces: Cburnett (CC BY-SA 3.0).</p>
     </section>
-  </main>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="imageModal" role="dialog" aria-label="Screenshot"><img id="imageModalImg" alt="Screenshot"></div>
 
   <div class="modal hidden" id="promoModal" role="dialog" aria-label="Choose promotion piece">
     <div class="modal-box" id="promoChoices"></div>
   </div>
-
-  <footer class="foot muted">
-    Engine: Stockfish 19 (GPL-3.0). Everything runs on your device. Pieces: Cburnett (CC BY-SA 3.0).
-  </footer>
 
   <script type="module" src="app.js"></script>
 </body>

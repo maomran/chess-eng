@@ -1,5 +1,5 @@
 // Caches the app shell (including the engine) so it works offline after the first visit.
-const CACHE = 'bestmove-v7';
+const CACHE = 'bestmove-v9';
 const ASSETS = [
   './',
   'index.html',
