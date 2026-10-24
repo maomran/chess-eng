@@ -1,5 +1,6 @@
 import { Chess, validateFen } from './vendor/chess.js';
 import { Engine } from './engine.js';
+import { startAnalytics, trackEvent } from './analytics.js';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const FILES = 'abcdefgh';
@@ -268,6 +269,7 @@ function setEngineOn(on) {
   $('engineBtn').textContent = on ? '■ Stop' : '▶ Analyze';
   $('engineBtn').classList.toggle('primary', !on);
   if (on) {
+    trackEvent('analyze');
     analyze();
   } else {
     engine?.stop();
@@ -651,6 +653,7 @@ function isPlaying() {
 
 function startGame(fromCurrent) {
   const pick = $('playColor').value;
+  trackEvent(`play-level-${+$('level').value + 1}`);
   const color = pick === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : pick;
   state.play = { active: true, color, level: +$('level').value, over: null, coach: $('coach').checked };
   state.orientation = color;
@@ -815,6 +818,7 @@ async function recognize() {
     const { recognize: readImage } = await import('./recognizer.js');
     const bottomHint = $('bottomSide').value;
     const res = await readImage(importFile, { bottomHint: bottomHint === 'auto' ? null : bottomHint });
+    trackEvent('screenshot-read');
     const placement = res.ranks
       .map((row) => row.replace(/\.+/g, (m) => String(m.length)))
       .join('/');
@@ -837,6 +841,7 @@ async function recognize() {
     showEditNote(note);
   } catch (err) {
     console.error(err);
+    trackEvent('screenshot-failed');
     setImportStatus(err?.message || String(err), true);
     $('manualFromImgBtn').classList.remove('hidden');
   } finally {
@@ -889,6 +894,7 @@ function wire() {
   $('coach').checked = !!state.play.coach;
   $('coach').addEventListener('change', () => {
     state.play.coach = $('coach').checked;
+    if (state.play.coach) trackEvent('coach-on');
     save();
     coachAnalyze();
   });
@@ -1023,6 +1029,7 @@ buildPalette();
 wire();
 positionChanged();
 layout();
+startAnalytics();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));

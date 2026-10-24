@@ -1,11 +1,12 @@
 // Caches the app shell (including the engine) so it works offline after the first visit.
-const CACHE = 'bestmove-v9';
+const CACHE = 'bestmove-v10';
 const ASSETS = [
   './',
   'index.html',
   'styles.css',
   'app.js',
   'engine.js',
+  'analytics.js',
   'recognizer.js',
   'manifest.webmanifest',
   'icons/icon-192.png',

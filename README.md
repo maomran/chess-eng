@@ -33,6 +33,14 @@ You can switch to **Analyze** at any time to look at the game with the engine.
 The whole app fits on one screen with no scrolling: the board resizes to the space left over, and on wide
 screens (phone in landscape, iPad) the controls sit beside the board.
 
+## Visitor analytics
+
+`analytics.js` counts visits with [GoatCounter](https://www.goatcounter.com): free, no cookies, no personal data.
+It is off until you set `GOATCOUNTER_CODE` in `analytics.js` to your GoatCounter site code.
+Besides page views it records a few events: `analyze`, `play-level-N`, `coach-on`, `screenshot-read`,
+`screenshot-failed`, and `opened-installed-app` (people who added the app to their home screen).
+Counts appear in your dashboard at `https://<code>.goatcounter.com`.
+
 ## Install on iPhone
 
 1. Host the site (see below) and open the URL in **Safari**.
@@ -56,6 +64,7 @@ The engine is the *lite, single-threaded* Stockfish build (~1.8 MB), which needs
 |---|---|
 | `index.html`, `styles.css` | Page layout and styling |
 | `app.js` | Board, move input, setup editor, analysis display |
+| `analytics.js` | Optional visitor counts (GoatCounter), off until a site code is set |
 | `engine.js` | Small UCI wrapper around the Stockfish web worker (also used for the computer opponent's levels) |
 | `recognizer.js` | Screenshot → position, on device: finds the board, then a small neural network labels each square |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
